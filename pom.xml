@@ -266,22 +266,14 @@
         <module>boms</module>
         <module>common</module>
         <module>core</module>
-        <module>dependencies</module>
-        <module>docs</module>
         <module>server-spi</module>
         <module>server-spi-private</module>
         <module>saml-core-api</module>
         <module>saml-core</module>
         <module>federation</module>
         <module>services</module>
-        <module>themes</module>
         <module>model</module>
         <module>util</module>
-        <module>wildfly</module>
-        <module>integration</module>
-        <module>adapters</module>
-        <module>authz</module>
-        <module>misc</module>
     </modules>
 
     <dependencyManagement>

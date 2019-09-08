@@ -16,6 +16,13 @@
  */
 package org.keycloak.credential;
 
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import org.keycloak.common.util.reflections.Types;
 import org.keycloak.models.CredentialValidationOutput;
 import org.keycloak.models.KeycloakSession;
@@ -30,22 +37,20 @@ import org.keycloak.storage.StorageId;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.UserStorageProviderFactory;
 import org.keycloak.storage.UserStorageProviderModel;
-
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Stream;
+import org.keycloak.storage.ldap.LDAPStorageProvider;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
  * @version $Revision: 1 $
  */
 public class UserCredentialStoreManager extends AbstractStorageManager<UserStorageProvider, UserStorageProviderModel>
-        implements UserCredentialManager.Streams, OnUserCache {
+		implements UserCredentialManager.Streams, OnUserCache {
+	
+	protected KeycloakSession session;
 
     public UserCredentialStoreManager(KeycloakSession session) {
         super(session, UserStorageProviderFactory.class, UserStorageProvider.class, UserStorageProviderModel::new, "user");
+        this.session = session;
     }
 
     protected UserCredentialStore getStoreForUser(UserModel user) {
@@ -271,14 +276,29 @@ public class UserCredentialStoreManager extends AbstractStorageManager<UserStora
 
     @Override
     public CredentialValidationOutput authenticate(KeycloakSession session, RealmModel realm, CredentialInput input) {
-        Stream<CredentialAuthentication> credentialAuthenticationStream = getEnabledStorageProviders(realm, CredentialAuthentication.class);
-        credentialAuthenticationStream = Stream.concat(credentialAuthenticationStream,
-                getCredentialProviders(session, CredentialAuthentication.class));
+    	
+        Stream<CredentialAuthentication> credentialAuthenticationStream1 = getEnabledStorageProviders(realm, CredentialAuthentication.class);
+        Stream<CredentialAuthentication> credentialAuthenticationStream2 = getCredentialProviders(session, CredentialAuthentication.class);
 
-        return credentialAuthenticationStream
+        List<CredentialAuthentication> list1 = credentialAuthenticationStream1
                 .filter(credentialAuthentication -> credentialAuthentication.supportsCredentialAuthenticationFor(input.getType()))
-                .map(credentialAuthentication -> credentialAuthentication.authenticate(realm, input))
-                .findFirst().orElse(null);
+                .collect(Collectors.toList());
+
+        List<CredentialAuthentication> list2 = credentialAuthenticationStream2
+                .filter(credentialAuthentication -> credentialAuthentication.supportsCredentialAuthenticationFor(input.getType()))
+                .collect(Collectors.toList());
+        
+        CredentialValidationOutput output = null;
+        for (CredentialAuthentication auth : list1) {          
+            output = auth.authenticate(realm, input, output);
+            if (output != null && !LDAPStorageProvider.isKerberosUsernameExists(output)) return output;
+        }
+        
+        for (CredentialAuthentication auth : list2) {          
+            output = auth.authenticate(realm, input, output);
+            if (output != null) return output;
+        }
+        return null;
     }
 
     @Override
